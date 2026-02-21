@@ -1,0 +1,66 @@
+version: "3.9"
+
+services:
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    ports:
+      - 6333:6333
+      - 6334:6334
+    expose:
+      - 6333
+      - 6334
+      - 6335
+    volumes:
+      - /data/qdrant:/qdrant/storage
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./input:/input
+      - /data/ollama:/root/.ollama
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+    # ollama-webui:
+    #   image: ghcr.io/ollama-webui/ollama-webui:main
+    #   container_name: ollama-webui
+    #   depends_on:
+    #     - ollama
+    #   ports:
+    #     - "3000:8080" # WebUI port (change 3000 to your desired port)
+    #   environment:
+    #     - OLLAMA_API_BASE_URL=http://ollama:11434/api
+    #   extra_hosts:
+    #     - host.docker.internal:host-gateway
+
+  backend:
+    build: ./backend
+    container_name: fastapi
+    command: uvicorn app.main:app --reload --port 90  --host 0.0.0.0
+    volumes:
+      - /data/rag-project/backend:/app
+    ports:
+      - 90:90
+    depends_on:
+      - qdrant
+      - ollama
+    environment:
+      - PYTHONPATH=/app
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - OLLAMA_HOST=http://ollama:11434
+
+  frontend:
+    build: ./frontend
+    container_name: react
+    ports:
+      - "80:80"
