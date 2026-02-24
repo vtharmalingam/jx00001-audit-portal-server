@@ -94,7 +94,7 @@ async def get_questions_by_category(ws,
     category_question_loader = CategoryQuestionLoader(data_dir)
     
 
-    # Final Result of the execution of firmographic search
+    # Final Result
     await emitter.info("🧱 Questions", 
         payload={
                 "reqType": request.reqType,
@@ -166,10 +166,7 @@ async def evaluate_answer(ws,
         )
 
 
-'''
-
-
-
+''' 
 # ---------------------------------------------------
 #   REQUEST 4:
 # ---------------------------------------------------

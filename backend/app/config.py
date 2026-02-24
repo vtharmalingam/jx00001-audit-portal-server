@@ -12,6 +12,10 @@ class EmbeddingConfig:
     normalize: bool = True
     show_progress: bool = False
 
+@dataclass(frozen=True)
+class S3:
+    bucket: str
+
 # AI Assessment:
 @dataclass(frozen=True)
 class AIAssessmentConfig:
@@ -19,7 +23,7 @@ class AIAssessmentConfig:
     indexes_dir: str
     llm: str
     embedding: EmbeddingConfig   # ✅ add this
-
+    s3:S3
 
 # -----------------------------
 # Root config
@@ -48,7 +52,8 @@ def get_config() -> AppConfig:
             data_dir=ai_cfg["data_dir"],
             indexes_dir=ai_cfg["indexes_dir"],
             llm=ai_cfg["llm"],
-            embedding=EmbeddingConfig(**ai_cfg["embedding"])  
+            embedding=EmbeddingConfig(**ai_cfg["embedding"]),
+            s3=S3(**ai_cfg["s3"])
         ),
     )
 

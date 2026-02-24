@@ -11,27 +11,175 @@ from langchain_core.output_parsers import (JsonOutputParser,
 from langchain_core.prompts.chat import ChatPromptTemplate
 from pydantic import BaseModel, Field, confloat, conlist
 
+from app.procs.anchor_match.question_registry import \
+    QuestionRegistry
+
 from app.procs.semantic_search.q_search_engine import SemanticSearchEngine
 
 # TODO: Move this to main and pass to the routes
 from app.llms.ollama_client import OllamaClient
 
 
+# S3 Services:
+from app.etl.s3.services.answer_service import AnswerService
+from app.etl.s3.services.s3_client import S3Client
+
 cfg = get_config()
 data_dir = cfg.ai_assessment.data_dir
 
 
-# TODO: Move this to main
+# --------------------------------------------------------------------------------
+# TODO: Move these to main or part of connection object (manager)
+# --------------------------------------------------------------------------------
 llm_client = OllamaClient().llm
+s3_client = S3Client(bucket=cfg.ai_assessment.s3.bucket)
 
-# -----------------------------------------------------------------------------
-# TODO: Hard-Coded
-# hard-coded
+
 # -----------------------------------------------------------------------------
 emb_cfg = cfg.ai_assessment.embedding
 engine = SemanticSearchEngine(emb_cfg.collection_name)
 
-# --------------------------------------------------------------------------
+
+# ---------------------------------------------------
+#   REQUEST 1:
+# 
+#   TODO: audit_id -> 0 (hard-coded)
+# 
+# ---------------------------------------------------
+@route("AI-ASSESSMENT-REQ", "SAVE-ANSWER")
+async def save_answer(ws,  
+                      client_id, 
+                      request, 
+                      manager):
+         
+  
+    emitter = EventEmitter(websocket=ws)
+
+    reqData = request.reqData
+    
+    if not reqData:     
+        await emitter.error("🚩 Missing 'reqData' field")
+        return
+
+    # category = reqData.get("category", "") 
+    org_id= reqData.get("org_id", "0")  
+    q_id = reqData.get("question_id", "")  
+    user_answer = reqData.get("user_answer", "")  
+    state = reqData.get("state", "draft")  
+
+
+    if not all([q_id, user_answer, org_id, state]):
+        await emitter.error("🚩 The payload 'reqData must contain these: category, q_id, user_answer, org_id, and state'")
+        return    
+
+    question_registry = QuestionRegistry(data_dir)
+
+    try:
+        # ✅ Initialize Answer Service (uses S3)
+        answer_service = AnswerService(s3_client)
+
+        # ✅ Persist to S3
+        answer_service.upsert_answer(
+            org_id=org_id,
+            audit_id=0,
+            question_id=q_id,
+            answer=user_answer,
+            state=state
+        )
+
+        await emitter.info(
+            "🧱 Save Answer",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "question_path": question_registry.get_question_path(q_id),
+                "status": True,
+                "saved_to": "s3"
+            }
+        )
+
+    except Exception as e:
+        await emitter.error(f"❌ Failed to save answer: {str(e)}",         
+                            payload = {
+                                                        "reqType": request.reqType, 
+                                                        "reqSubType": request.reqSubType
+                                                        })
+
+# ---------------------------------------------------
+#   REQUEST 2:
+# 
+#   TODO: audit_id -> 0 (hard-coded)
+# 
+# ---------------------------------------------------
+@route("AI-ASSESSMENT-REQ", "FETCH-ANSWERS")
+async def fetch_answers(
+    ws,
+    client_id,
+    request,
+    manager
+):
+    emitter = EventEmitter(websocket=ws)
+
+    reqData = request.reqData
+
+    # 🔴 Validate request
+    if not reqData:
+        await emitter.error("🚩 Missing 'reqData' field")
+        return
+
+    org_id = reqData.get("org_id")
+    audit_id = reqData.get("audit_id", "0")  # default for now
+
+    if not org_id:
+        await emitter.error("🚩 'org_id' is required")
+        return
+
+    try:
+        # ✅ Initialize service
+        answer_service = AnswerService(s3_client)
+
+        # ✅ Fetch from S3
+        answers = answer_service.get_all_answers(
+            org_id=org_id,
+            audit_id=0
+        )
+
+        # 🔹 Optional: convert list → map (UI friendly)
+        answers_map = {
+            item["question_id"]: item
+            for item in answers
+        }
+
+        # ✅ Emit success response
+        await emitter.info(
+            "📥 Fetch Answers",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "status": True,
+                "org_id": org_id,
+                "audit_id": audit_id,
+                "total": len(answers_map),
+                "answers": answers_map
+            }
+        )
+
+    except Exception as e:
+        await emitter.error(
+            f"❌ Failed to fetch answers: {str(e)}",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "org_id": org_id,
+                "audit_id": audit_id
+            }
+        )
+
+
+
+# ---------------------------------------------------
+#   REQUEST 2:
+# ---------------------------------------------------
 @route("SUPPORTWIZ_USER_REQS", "SUMMARY-SEMANTIC-SEARCH")
 async def search_s_kbindex_by_context(
    ws, 
@@ -83,8 +231,11 @@ async def search_s_kbindex_by_context(
 
 
 
+
+
+
 # ---------------------------------------------------
-#   REQUEST 2:
+#   REQUEST 3:
 # ---------------------------------------------------
 @route("SUPPORTWIZ_USER_REQS", "USER-ANSWER-GAP-ANALYSIS")
 async def answer_gap_analysis(ws, client_id, request, manager):

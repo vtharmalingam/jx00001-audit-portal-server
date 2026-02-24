@@ -5,6 +5,7 @@ FROM tiangolo/uvicorn-gunicorn:python3.11
 RUN apt-get update && apt-get install -y \
   libgl1 \
   libglib2.0-0 \
+  awscli -y \
   && rm -rf /var/lib/apt/lists/*
 
 COPY ./requirements.txt /app/requirements.txt
