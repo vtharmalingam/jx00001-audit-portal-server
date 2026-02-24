@@ -22,6 +22,10 @@ from app.llms.ollama_client import OllamaClient
 
 # S3 Services:
 from app.etl.s3.services.answer_service import AnswerService
+from app.etl.s3.services.auditor_service import AuditorService
+from app.etl.s3.services.report_service import ReportService
+from app.etl.s3.services.operational_service import OperationalService
+
 from app.etl.s3.services.s3_client import S3Client
 
 cfg = get_config()
@@ -174,6 +178,289 @@ async def fetch_answers(
                 "audit_id": audit_id
             }
         )
+
+
+@route("AI-ASSESSMENT-REQ", "SAVE-ORG-PROFILE")
+async def save_org_profile(ws, client_id, request, manager):
+
+    emitter = EventEmitter(websocket=ws)
+
+    reqData = request.reqData
+
+    # 🔴 Validate
+    if not reqData:
+        await emitter.error("🚩 Missing 'reqData'")
+        return
+
+    org_id = reqData.get("org_id")
+    name = reqData.get("name")
+    email = reqData.get("email")
+    status = reqData.get("status", "pending")
+
+    if not all([org_id, name, email]):
+        await emitter.error(
+            "🚩 Required: org_id, name, email"
+        )
+        return
+
+    try:
+        service = OperationalService(s3_client)
+
+        result = service.upsert_org_profile(
+            org_id=org_id,
+            name=name,
+            email=email,
+            status=status
+        )
+
+        await emitter.info(
+            "🏢 Save Org Profile",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "status": True,
+                "org_id": org_id,
+                "data": result
+            }
+        )
+
+    except Exception as e:
+        await emitter.error(
+            f"❌ Failed to save org profile: {str(e)}",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType
+            }
+        )
+
+
+@route("AI-ASSESSMENT-REQ", "FETCH-ORGANIZATIONS")
+async def fetch_organizations(ws, client_id, request, manager):
+
+    emitter = EventEmitter(websocket=ws)
+
+    try:
+        service = OperationalService(s3_client)
+
+        orgs = service.get_all_organizations()
+
+        await emitter.info(
+            "🏢 Fetch Organizations",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "status": True,
+                "total": len(orgs),
+                "organizations": orgs
+            }
+        )
+
+    except Exception as e:
+        await emitter.error(
+            f"❌ Failed to fetch organizations: {str(e)}",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType
+            }
+        )
+
+
+
+# @route("AI-ASSESSMENT-REQ", "FETCH-GAP-ANALYSIS")
+# async def fetch_gap_analysis(
+#     ws,
+#     client_id,
+#     request,
+#     manager
+# ):
+#     emitter = EventEmitter(websocket=ws)
+
+#     reqData = request.reqData
+
+#     # 🔴 Validate request
+#     if not reqData:
+#         await emitter.error("🚩 Missing 'reqData' field")
+#         return
+
+#     org_id = reqData.get("org_id")
+#     audit_id = reqData.get("audit_id")
+
+#     if not all([org_id, audit_id]):
+#         await emitter.error("🚩 'org_id' and 'audit_id' are required")
+#         return
+
+#     try:
+#         # ✅ Use S3 client from manager
+#         # s3_client = manager.s3_client
+
+#         # ✅ Use ReportService (correct service for gap analysis)
+#         report_service = ReportService(s3_client)
+
+#         # ✅ Fetch gap analysis data from S3
+#         results = report_service.get_gap_report(
+#             org_id=org_id,
+#             audit_id=audit_id
+#         )
+
+#         # 🔹 Convert list → map (UI friendly)
+#         results_map = {
+#             item.get("question_id"): item
+#             for item in results
+#             if item.get("question_id")
+#         }
+
+#         # ✅ Emit success response
+#         await emitter.info(
+#             "📥 Fetch gap analysis",
+#             payload={
+#                 "reqType": request.reqType,
+#                 "reqSubType": request.reqSubType,
+#                 "status": True,
+#                 "org_id": org_id,
+#                 "audit_id": audit_id,
+#                 "total": len(results_map),
+#                 "data": results_map
+#             }
+#         )
+
+#     except Exception as e:
+#         await emitter.error(
+#             f"❌ Failed to fetch gap analysis: {str(e)}",
+#             payload={
+#                 "reqType": request.reqType,
+#                 "reqSubType": request.reqSubType,
+#                 "org_id": org_id,
+#                 "audit_id": audit_id
+#             }
+#         )
+
+
+@route("AI-ASSESSMENT-REQ", "FETCH-GAP-ANALYSIS")
+@route("AI-ASSESSMENT-REQ", "FETCH-FULL-AUDIT")
+async def fetch_full_audit(ws, client_id, request, manager):
+
+    emitter = EventEmitter(websocket=ws)
+
+    reqData = request.reqData
+
+    if not reqData:
+        await emitter.error("🚩 Missing 'reqData'")
+        return
+
+    org_id = reqData.get("org_id")
+    audit_id = reqData.get("audit_id", "0")
+
+    if not org_id:
+        await emitter.error("🚩 Missing org_id")
+        return
+
+    try:
+        report_service = ReportService(s3_client)
+
+        result = report_service.get_full_audit_view(org_id, audit_id)
+
+        await emitter.info(
+            "📊 Full Audit View",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "status": True,
+                **result
+            }
+        )
+
+    except Exception as e:
+        await emitter.error(
+            f"❌ Failed: {str(e)}",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType
+            }
+        )
+
+
+@route("AI-ASSESSMENT-REQ", "SAVE-REVIEW")
+async def save_review(ws, client_id, request, manager):
+
+    emitter = EventEmitter(websocket=ws)
+
+    reqData = request.reqData
+
+    # 🔴 Validate
+    if not reqData:
+        await emitter.error("🚩 Missing 'reqData'")
+        return
+
+    org_id = reqData.get("org_id")
+    audit_id = reqData.get("audit_id", "0")
+    question_id = reqData.get("question_id")
+    review_state = reqData.get("review_state")
+    reviewer_comment = reqData.get("reviewer_comment")
+
+    if not all([org_id, audit_id, question_id, review_state]):
+        await emitter.error(
+            "🚩 Required: org_id, audit_id, question_id, review_state"
+        )
+        return
+
+    try:
+        # 🔹 Services
+        auditor_service = AuditorService(s3_client)
+        answer_service = AnswerService(s3_client)
+
+        # 🔹 Fetch answer to get version
+        answer = answer_service.get_answer(org_id, audit_id, question_id)
+
+        if not answer:
+            await emitter.error("❌ Answer not found for question")
+            return
+
+        version = answer.get("version", 0)
+
+        # 🔹 Build feedback payload
+        feedback_payload = {
+            "version": version,
+            "auditor_id": client_id or "auditor_unknown",
+            "review_state": review_state,
+            "summary": reviewer_comment,
+            "feedback": []  # keeping structured field for future
+        }
+
+        # 🔹 Save to S3
+        result = auditor_service.update_feedback(
+            org_id=org_id,
+            audit_id=audit_id,
+            question_id=question_id,
+            feedback=feedback_payload
+        )
+
+        # ✅ Success response
+        await emitter.info(
+            "🧑‍⚖️ Save Review",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "status": True,
+                "org_id": org_id,
+                "audit_id": audit_id,
+                "question_id": question_id,
+                "review_state": result.get("review_state"),
+                "reviewed_version": result.get("reviewed_version")
+            }
+        )
+
+    except Exception as e:
+        await emitter.error(
+            f"❌ Failed to save review: {str(e)}",
+            payload={
+                "reqType": request.reqType,
+                "reqSubType": request.reqSubType,
+                "org_id": org_id,
+                "audit_id": audit_id,
+                "question_id": question_id
+            }
+        )
+
 
 
 

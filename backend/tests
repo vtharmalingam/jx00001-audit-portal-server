@@ -14,3 +14,5 @@ python -m app.procs.question_evaluator
 # S3 pytests
 from /app, run `pytest`
 
+python -m app.etl.s3.services.ai_service
+

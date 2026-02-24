@@ -1,17 +1,7 @@
-## Prune Images/Containers
-`docker system prune -a`
+## Project
 
-## Qdrant
-
-### Sanity Check
-curl http://localhost:6333
-
-### Images:
-https://qdrant.tech/documentation/guides/installation/
-
----
-
-## Web UI
-http://100.49.55.139:6333/dashboard
+This is a front-end of the project built for Chris (`christopher.trocola@theaict.com`). This is an audit assessment tool for organizations to drive regulatory compliance.
 
 
+## Frontend
+`jx00001-audit-portal-frontend`

@@ -213,7 +213,7 @@ Add `evaluation_basis` useful for: `transparency` and `enterprise audits`:
 ```
 
 suggestion: 
-  - `review_state` : not_reviewed | in_review | needs_revision | approved | rejected
+  - `review_state` : not_reviewed | in_review | needs_revision | compliant | non_compliant
 
 
 ## progress.json
