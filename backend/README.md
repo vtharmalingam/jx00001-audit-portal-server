@@ -4,7 +4,7 @@
 
 Install Docker Compose V2
 
-## 🔥 Step 1 — Add Docker official repository
+## Step 1 — Add Docker official repository
 
 ```bash
 sudo apt-get update
@@ -20,7 +20,7 @@ sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 ---
 
-## 🔥 Step 2 — Add Docker repo
+## Step 2 — Add Docker repo
 
 ```bash
 echo \
@@ -33,7 +33,7 @@ echo \
 
 ---
 
-## 🔥 Step 3 — Install Compose plugin
+## Step 3 — Install Compose plugin
 
 ```bash
 sudo apt-get update
@@ -50,7 +50,7 @@ docker compose version
  
 ---
 
-# 🚀 Run your stack
+#  Run your stack
 
 ```bash
 docker compose up -d --build
